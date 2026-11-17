@@ -1,0 +1,1406 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{lmodern}
+\usepackage[margin=2cm,headheight=15pt]{geometry}
+\usepackage{graphicx,xcolor,listings,caption,fancyhdr,booktabs,tabularx}
+
+\usepackage{fvextra}
+\usepackage[most]{tcolorbox}
+\definecolor{console}{HTML}{012456}
+\definecolor{barre}{HTML}{202630}
+\definecolor{clair}{HTML}{F0F3F8}
+\tcbset{terminal/.style={enhanced,breakable,colback=console,colframe=barre,
+colbacktitle=barre,coltitle=white,coltext=clair,fonttitle=\sffamily\small,
+boxrule=0.5pt,arc=2mm,left=3mm,right=3mm,top=2mm,bottom=2mm,
+before skip=10pt,after skip=10pt}}
+
+\usepackage[hidelinks]{hyperref}
+\definecolor{bleu}{HTML}{193B65}
+\definecolor{fond}{HTML}{F2F5F8}
+\lstset{basicstyle=\ttfamily\small,backgroundcolor=\color{fond},frame=single,rulecolor=\color{bleu!25},breaklines=true,columns=fullflexible,keepspaces=true,showstringspaces=false,aboveskip=8pt,belowskip=8pt}
+\captionsetup{font=small,labelfont=bf,hypcap=false}
+\pagestyle{fancy}\fancyhf{}
+\fancyhead[L]{\small ENSAH -- TP 4 Kubernetes}
+\fancyhead[R]{\small kind, Docker et kubectl}
+\fancyfoot[C]{\thepage}
+\setlength{\parindent}{0pt}\setlength{\parskip}{6pt}
+\newcommand{\auteur}{Yahya Azalmat}
+\newcommand{\filiere}{Génie Informatique -- Génie logiciel}
+\newcommand{\encadrant}{Hayat Routaib}
+\begin{document}
+\begin{titlepage}\thispagestyle{empty}
+\begin{minipage}[c]{0.46\textwidth}\centering\IfFileExists{logos/logo-ensah.png}{\includegraphics[width=3.5cm,height=2.6cm,keepaspectratio]{logos/logo-ensah.png}}{\Large\bfseries\color{bleu}ENSAH}\end{minipage}\hfill
+\begin{minipage}[c]{0.46\textwidth}\centering\IfFileExists{logos/logo-uae.png}{\includegraphics[width=5cm,height=2.6cm,keepaspectratio]{logos/logo-uae.png}}{\Large\bfseries\color{bleu}Université Abdelmalek Essaâdi}\end{minipage}
+\begin{center}\vspace{0.8cm}
+{\Large\bfseries Université Abdelmalek Essaâdi\par}\vspace{0.3cm}
+{\large École Nationale des Sciences Appliquées d'Al Hoceima\par}\vspace{1.6cm}
+{\large COMPTE RENDU DE TRAVAUX PRATIQUES\par}\vspace{0.5cm}
+{\color{bleu}\rule{\linewidth}{1.2pt}\par}\vspace{0.4cm}
+{\Huge\bfseries\color{bleu} TP 4 -- Kubernetes\par}\vspace{0.4cm}
+{\Large Cluster multi-nœuds, Pods et Services\par}\vspace{0.3cm}
+{\large Auto-réparation, rolling update et rollback\par}\vspace{0.4cm}
+{\color{bleu}\rule{\linewidth}{1.2pt}\par}\vspace{1.2cm}
+\begin{tabular}{rl}\textbf{Réalisé par :} & \auteur \\[0.3cm]\textbf{Filière :} & \filiere \\[0.3cm]\textbf{Encadré par :} & \encadrant\end{tabular}
+
+\vspace{0.7cm}
+{\small\textbf{Fichiers du projet sur GitHub}\par}
+\vspace{0.15cm}
+{\small\url{https://github.com/Yahya-dev20/k8s-tp-yahya-azalmat}\par}
+\vfill{\large Année universitaire 2026--2027\par}\vspace{0.3cm}{17 novembre 2026\par}
+\end{center}\end{titlepage}
+{\normalfont\tableofcontents}\clearpage
+\section*{Introduction}\addcontentsline{toc}{section}{Introduction}
+Ce TP crée un cluster kind composé d'un control-plane et de deux workers, puis étudie un Pod Nginx et une application whoami exposée par un Service NodePort. Les manipulations couvrent le mode déclaratif, l'auto-réparation, le scaling, les mises à jour et le rollback.
+
+\textbf{Présentation des images :} les visuels sont reconstitués à partir des sorties réellement enregistrées, avec une apparence inspirée de PowerShell et Windows Terminal. Ce ne sont pas des captures natives. L'exécution a eu lieu dans Ubuntu WSL2 avec Docker Desktop ; les commandes et leur syntaxe Bash sont conservées. Le chemin court de l'invite est uniquement une présentation graphique. Les consoles sont dessinées directement par LaTeX, sans image externe. Les sorties longues se poursuivent automatiquement sur la page suivante. Les symboles décoratifs non compatibles avec pdfLaTeX sont normalisés, sans modifier les résultats techniques.
+
+\textbf{Contexte :} le kubeconfig du TP est isolé ; les autres conteneurs Docker ne sont pas modifiés. Le cluster reste démarré. Les informations de couverture sont reprises du modèle fourni et peuvent être adaptées.
+
+\clearpage
+\section{Préparation de l'environnement}
+
+\subsection{Commande 1 -- Vérifier Docker}
+\begin{lstlisting}
+docker run --rm hello-world
+\end{lstlisting}
+Exécute puis supprime le conteneur de test. Le message Hello from Docker confirme que le client communique avec le moteur Docker.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 1 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ docker run --rm hello-world
+
+
+Hello from Docker!
+This message shows that your installation appears to be working correctly.
+
+To generate this message, Docker took the following steps:
+ 1. The Docker client contacted the Docker daemon.
+ 2. The Docker daemon pulled the "hello-world" image from the Docker Hub.
+    (amd64)
+ 3. The Docker daemon created a new container from that image which runs the
+    executable that produces the output you are currently reading.
+ 4. The Docker daemon streamed that output to the Docker client, which sent it
+    to your terminal.
+
+To try something more ambitious, you can run an Ubuntu container with:
+ $ docker run -it ubuntu bash
+
+Share images, automate workflows, and more with a free Docker ID:
+ https://hub.docker.com/
+
+For more examples and ideas, visit:
+ https://docs.docker.com/get-started/
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 2 -- Version de kind}
+\begin{lstlisting}
+kind version
+\end{lstlisting}
+Affiche la version de kind, utilisé pour créer les nœuds Kubernetes sous forme de conteneurs Docker.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 2 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kind version
+
+kind v0.33.0 go1.26.7 linux/amd64
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 3 -- Version de kubectl}
+\begin{lstlisting}
+kubectl version --client
+\end{lstlisting}
+Vérifie la disponibilité du client kubectl et affiche ses versions, sans contacter de cluster.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 3 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl version --client
+
+Client Version: v1.36.1
+Kustomize Version: v5.8.1
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 4 -- Version de Helm}
+\begin{lstlisting}
+helm version
+\end{lstlisting}
+Vérifie que le gestionnaire de paquets Helm est installé. Aucun chart Helm n’est déployé dans ce TP.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 4 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ helm version
+
+version.BuildInfo{Version:"v4.0.0", GitCommit:"99cd1964357c793351be481d55abbe21c6b2f4ec", GitTreeState:"clean", GoVersion:"go1.25.3", KubeClientVersion:"v1.34"}
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\clearpage
+\section{Partie A -- Création du cluster}
+\subsection{Configuration du cluster}
+\begin{lstlisting}
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: tp-k8s
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 30080
+  - role: worker
+  - role: worker
+\end{lstlisting}
+
+\subsection{Commande 5 -- Créer le cluster multi-nœuds}
+\begin{lstlisting}
+kind create cluster --config kind-config.yaml --wait 180s
+\end{lstlisting}
+Lit kind-config.yaml et crée un control-plane et deux workers. L’option --wait 180s demande d’attendre que le control-plane soit prêt ; elle ne fixe pas la durée totale de création.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 5 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kind create cluster --config kind-config.yaml --wait 180s
+
+Creating cluster "tp-k8s" ...
+ - Ensuring node image (kindest/node:v1.37.0) [image]  ...
+ [OK] Ensuring node image (kindest/node:v1.37.0) [image]
+ - Preparing nodes      ...
+ [OK] Preparing nodes    
+ - Writing configuration   ...
+ [OK] Writing configuration 
+ - Starting control-plane   ...
+ [OK] Starting control-plane 
+ - Installing CNI   ...
+ [OK] Installing CNI 
+ - Installing StorageClass   ...
+ [OK] Installing StorageClass 
+ - Joining worker nodes   ...
+ [OK] Joining worker nodes 
+ - Waiting <= 3m0s for control-plane = Ready   ...
+ [OK] Waiting <= 3m0s for control-plane = Ready 
+ - Ready after 24s 
+Set kubectl context to "kind-tp-k8s"
+You can now use your cluster with:
+
+kubectl cluster-info --context kind-tp-k8s
+
+Thanks for using kind!
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 6 -- Contrôler les nœuds}
+\begin{lstlisting}
+kubectl get nodes -o wide
+\end{lstlisting}
+Affiche les rôles, versions, adresses et runtimes. Les trois nœuds sont Ready.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 6 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl get nodes -o wide
+
+NAME                   STATUS   ROLES           AGE   VERSION   INTERNAL-IP   EXTERNAL-IP   OS-IMAGE                       KERNEL-VERSION                             CONTAINER-RUNTIME
+tp-k8s-control-plane   Ready    control-plane   51s   v1.37.0   172.21.0.3    <none>        Debian GNU/Linux 13 (trixie)   6.6.87.2-microsoft-standard-WSL2 (amd64)   containerd://2.3.4
+tp-k8s-worker          Ready    <none>          34s   v1.37.0   172.21.0.2    <none>        Debian GNU/Linux 13 (trixie)   6.6.87.2-microsoft-standard-WSL2 (amd64)   containerd://2.3.4
+tp-k8s-worker2         Ready    <none>          34s   v1.37.0   172.21.0.4    <none>        Debian GNU/Linux 13 (trixie)   6.6.87.2-microsoft-standard-WSL2 (amd64)   containerd://2.3.4
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 7 -- Examiner les composants système}
+\begin{lstlisting}
+kubectl get pods -n kube-system
+\end{lstlisting}
+Liste les Pods de kube-system. Un CoreDNS est encore à 0/1 au moment de ce premier relevé ; le test DNS final confirme ensuite son fonctionnement.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 7 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl get pods -n kube-system
+
+NAME                                           READY   STATUS    RESTARTS   AGE
+coredns-559f6c778d-7vlcb                       0/1     Running   0          36s
+coredns-559f6c778d-zzj2n                       1/1     Running   0          36s
+etcd-tp-k8s-control-plane                      1/1     Running   0          47s
+kindnet-q7tzs                                  1/1     Running   0          34s
+kindnet-qv4dh                                  1/1     Running   0          34s
+kindnet-vpw6q                                  1/1     Running   0          36s
+kube-apiserver-tp-k8s-control-plane            1/1     Running   0          47s
+kube-controller-manager-tp-k8s-control-plane   1/1     Running   0          42s
+kube-proxy-868mq                               1/1     Running   0          36s
+kube-proxy-8z45g                               1/1     Running   0          34s
+kube-proxy-mswc8                               1/1     Running   0          34s
+kube-scheduler-tp-k8s-control-plane            1/1     Running   0          49s
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 8 -- Identifier les conteneurs des nœuds}
+\begin{lstlisting}
+docker ps
+\end{lstlisting}
+Affiche les conteneurs Docker actifs. Les trois conteneurs tp-k8s représentent les nœuds ; Jenkins et PostgreSQL existaient déjà et n’ont pas été modifiés.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 8 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ docker ps
+
+CONTAINER ID   IMAGE                       COMMAND                  CREATED         STATUS                    PORTS                                                 NAMES
+8e4235147acb   kindest/node:v1.37.0        "/usr/local/bin/entr..."   2 minutes ago   Up About a minute         0.0.0.0:30080->30080/tcp, 127.0.0.1:44503->6443/tcp   tp-k8s-control-plane
+5e9447cfe6e2   kindest/node:v1.37.0        "/usr/local/bin/entr..."   2 minutes ago   Up About a minute                                                               tp-k8s-worker2
+e9bf26410f72   kindest/node:v1.37.0        "/usr/local/bin/entr..."   2 minutes ago   Up About a minute                                                               tp-k8s-worker
+d32eff8bcc8d   jenkins/jenkins:lts-jdk21   "/usr/bin/tini -- /u..."   4 days ago      Up 12 minutes             127.0.0.1:8090->8080/tcp                              jenkins
+8149b78334ed   postgres:17                 "docker-entrypoint.s..."   5 days ago      Up 12 minutes (healthy)   127.0.0.1:5432->5432/tcp                              marketplace-postgres
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\clearpage
+\section{Partie B -- Manipulation du Pod}
+
+\subsection{Commande 9 -- Créer le Pod Nginx}
+\begin{lstlisting}
+kubectl run web --image=nginx:1.27 --port=80
+\end{lstlisting}
+Crée directement un Pod autonome nommé web avec nginx:1.27. Le port déclaré ne crée aucun Service.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 9 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl run web --image=nginx:1.27 --port=80
+
+pod/web created
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 10 -- Attendre le Pod Nginx}
+\begin{lstlisting}
+kubectl wait --for=condition=Ready pod/web --timeout=180s
+\end{lstlisting}
+Attend la condition Ready, avec un délai maximal de 180 secondes, avant les commandes d’inspection.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 10 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl wait --for=condition=Ready pod/web --timeout=180s
+
+pod/web condition met
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 11 -- Localiser le Pod}
+\begin{lstlisting}
+kubectl get pods -o wide
+\end{lstlisting}
+Affiche l’état Running, l’adresse IP et le worker qui héberge le Pod web.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 11 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl get pods -o wide
+
+NAME   READY   STATUS    RESTARTS   AGE   IP           NODE            NOMINATED NODE   READINESS GATES
+web    1/1     Running   0          15s   10.244.1.2   tp-k8s-worker   <none>           <none>
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 12 -- Décrire le Pod}
+\begin{lstlisting}
+kubectl describe pod web
+\end{lstlisting}
+Présente le conteneur, l’image, les conditions, les volumes et les événements. Les événements confirment le téléchargement et le démarrage de Nginx.
+
+\clearpage
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 12 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl describe pod web
+
+Name:             web
+Namespace:        default
+Priority:         0
+Service Account:  default
+Node:             tp-k8s-worker/172.21.0.2
+Start Time:       Tue, 17 Nov 2026 11:13:22 +0000
+Labels:           run=web
+Annotations:      <none>
+Status:           Running
+IP:               10.244.1.2
+IPs:
+  IP:  10.244.1.2
+Containers:
+  web:
+    Container ID:   containerd://044c86bdb30af2bd72ece853e3357d3972494bf96e9d4b5c16baf46e407d4f3c
+    Image:          nginx:1.27
+    Image ID:       docker.io/library/nginx@sha256:6784fb0834aa7dbbe12e3d7471e69c290df3e6ba810dc38b34ae33d3c1c05f7d
+    Port:           80/TCP
+    Host Port:      0/TCP
+    State:          Running
+      Started:      Tue, 17 Nov 2026 11:13:37 +0000
+    Ready:          True
+    Restart Count:  0
+    Environment:    <none>
+    Mounts:
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-9hrwh (ro)
+Conditions:
+  Type                        Status
+  PodReadyToStartContainers   True 
+  Initialized                 True 
+  Ready                       True 
+  ContainersReady             True 
+  PodScheduled                True 
+Volumes:
+  kube-api-access-9hrwh:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    Optional:                false
+    DownwardAPI:             true
+QoS Class:                   BestEffort
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:
+  Type    Reason     Age   From               Message
+  ----    ------     ----  ----               -------
+  Normal  Scheduled  15s   default-scheduler  Successfully assigned default/web to tp-k8s-worker
+  Normal  Pulling    14s   kubelet            spec.containers{web}: Pulling image "nginx:1.27"
+  Normal  Pulled     1s    kubelet            spec.containers{web}: Successfully pulled image "nginx:1.27" in 13.321s (13.321s including waiting). Image size: 72406859 bytes.
+  Normal  Created    1s    kubelet            spec.containers{web}: Container created
+  Normal  Started    0s    kubelet            spec.containers{web}: Container started
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 13 -- Lire les journaux Nginx}
+\begin{lstlisting}
+kubectl logs web
+\end{lstlisting}
+Affiche les journaux du conteneur : scripts de configuration, version du serveur et démarrage des processus de travail.
+
+\clearpage
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 13 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl logs web
+
+/docker-entrypoint.sh: /docker-entrypoint.d/ is not empty, will attempt to perform configuration
+/docker-entrypoint.sh: Looking for shell scripts in /docker-entrypoint.d/
+/docker-entrypoint.sh: Launching /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh
+10-listen-on-ipv6-by-default.sh: info: Getting the checksum of /etc/nginx/conf.d/default.conf
+10-listen-on-ipv6-by-default.sh: info: Enabled listen on IPv6 in /etc/nginx/conf.d/default.conf
+/docker-entrypoint.sh: Sourcing /docker-entrypoint.d/15-local-resolvers.envsh
+/docker-entrypoint.sh: Launching /docker-entrypoint.d/20-envsubst-on-templates.sh
+/docker-entrypoint.sh: Launching /docker-entrypoint.d/30-tune-worker-processes.sh
+/docker-entrypoint.sh: Configuration complete; ready for start up
+2026/11/17 11:13:37 [notice] 1#1: using the "epoll" event method
+2026/11/17 11:13:37 [notice] 1#1: nginx/1.27.5
+2026/11/17 11:13:37 [notice] 1#1: built by gcc 12.2.0 (Debian 12.2.0-14) 
+2026/11/17 11:13:37 [notice] 1#1: OS: Linux 6.6.87.2-microsoft-standard-WSL2
+2026/11/17 11:13:37 [notice] 1#1: getrlimit(RLIMIT_NOFILE): 1073741816:1073741816
+2026/11/17 11:13:37 [notice] 1#1: start worker processes
+2026/11/17 11:13:37 [notice] 1#1: start worker process 33
+2026/11/17 11:13:37 [notice] 1#1: start worker process 34
+2026/11/17 11:13:37 [notice] 1#1: start worker process 35
+2026/11/17 11:13:37 [notice] 1#1: start worker process 36
+2026/11/17 11:13:37 [notice] 1#1: start worker process 37
+2026/11/17 11:13:37 [notice] 1#1: start worker process 38
+2026/11/17 11:13:37 [notice] 1#1: start worker process 39
+2026/11/17 11:13:37 [notice] 1#1: start worker process 40
+2026/11/17 11:13:37 [notice] 1#1: start worker process 41
+2026/11/17 11:13:37 [notice] 1#1: start worker process 42
+2026/11/17 11:13:37 [notice] 1#1: start worker process 43
+2026/11/17 11:13:37 [notice] 1#1: start worker process 44
+2026/11/17 11:13:37 [notice] 1#1: start worker process 45
+2026/11/17 11:13:37 [notice] 1#1: start worker process 46
+2026/11/17 11:13:37 [notice] 1#1: start worker process 47
+2026/11/17 11:13:37 [notice] 1#1: start worker process 48
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 14 -- Exécuter une commande dans le conteneur}
+\begin{lstlisting}
+kubectl exec web -- sh -c 'hostname; nginx -v; exit'
+\end{lstlisting}
+Le séparateur -- introduit la commande du conteneur. Le shell affiche hostname puis nginx -v et se ferme. C’est l’équivalent non interactif de l’entrée dans le Pod demandée par le TP.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 14 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl exec web -- sh -c 'hostname; nginx -v; exit'
+
+web
+nginx version: nginx/1.27.5
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Redirection temporaire du port}
+Le script a lancé la commande suivante en arrière-plan, attendu trois secondes, exécuté la requête HTTP, puis arrêté la redirection.
+\begin{lstlisting}
+kubectl port-forward pod/web 8080:80
+\end{lstlisting}
+Le port local 8080 est redirigé vers le port 80 du Pod. Le journal de cette redirection est conservé avec les sources.
+
+\subsection{Commande 15 -- Tester Nginx par HTTP}
+\begin{lstlisting}
+curl -fsS http://localhost:8080
+\end{lstlisting}
+La requête utilise le port-forward lancé en arrière-plan par le script. Le HTML retourné contient Welcome to nginx!, ce qui confirme l’accès HTTP ; il ne s’agit pas d’une capture de navigateur.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 15 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ curl -fsS http://localhost:8080
+
+<!DOCTYPE html>
+<html>
+<head>
+<title>Welcome to nginx!</title>
+<style>
+html { color-scheme: light dark; }
+body { width: 35em; margin: 0 auto;
+font-family: Tahoma, Verdana, Arial, sans-serif; }
+</style>
+</head>
+<body>
+<h1>Welcome to nginx!</h1>
+<p>If you see this page, the nginx web server is successfully installed and
+working. Further configuration is required.</p>
+
+<p>For online documentation and support please refer to
+<a href="http://nginx.org/">nginx.org</a>.<br/>
+Commercial support is available at
+<a href="http://nginx.com/">nginx.com</a>.</p>
+
+<p><em>Thank you for using nginx.</em></p>
+</body>
+</html>
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 16 -- Supprimer le Pod autonome}
+\begin{lstlisting}
+kubectl delete pod web
+\end{lstlisting}
+Supprime web. Aucun Deployment ni ReplicaSet ne maintient ce Pod.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 16 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl delete pod web
+
+pod "web" deleted from default namespace
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 17 -- Constater l’absence de recréation}
+\begin{lstlisting}
+kubectl get pods
+\end{lstlisting}
+La liste des Pods est vide après la suppression : le Pod autonome n’a pas été recréé.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 17 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl get pods
+
+No resources found in default namespace.
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 18 -- Générer le manifeste déclaratif}
+\begin{lstlisting}
+kubectl run web --image=nginx:1.27 --dry-run=client -o yaml > pod.yaml
+\end{lstlisting}
+--dry-run=client produit le YAML sans créer de ressource. La redirection écrit pod.yaml ; l’absence de sortie à l’écran est normale.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 18 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl run web --image=nginx:1.27 --dry-run=client -o yaml > pod.yaml
+
+(aucune sortie standard)
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 19 -- Lire le manifeste du Pod}
+\begin{lstlisting}
+cat pod.yaml
+\end{lstlisting}
+Affiche le contenu réellement généré : un objet Pod nommé web utilisant nginx:1.27.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 19 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ cat pod.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: web
+  name: web
+spec:
+  containers:
+  - image: nginx:1.27
+    name: web
+    resources: {}
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+status: {}
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 20 -- Appliquer le manifeste}
+\begin{lstlisting}
+kubectl apply -f pod.yaml
+\end{lstlisting}
+Crée le Pod à partir du fichier. Le mode déclaratif décrit l’état souhaité dans un manifeste réutilisable.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 20 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl apply -f pod.yaml
+
+pod/web created
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 21 -- Attendre le Pod déclaratif}
+\begin{lstlisting}
+kubectl wait --for=condition=Ready pod/web --timeout=180s
+\end{lstlisting}
+Attend que le nouveau Pod soit prêt avant de vérifier son état.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 21 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl wait --for=condition=Ready pod/web --timeout=180s
+
+pod/web condition met
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 22 -- Vérifier la recréation déclarative}
+\begin{lstlisting}
+kubectl get pods
+\end{lstlisting}
+Confirme que web est de nouveau Running avec un conteneur prêt.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 22 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl get pods
+
+NAME   READY   STATUS    RESTARTS   AGE
+web    1/1     Running   0          1s
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\clearpage
+\section{Partie C -- Deployment et Service}
+\subsection{Manifeste applicatif}
+\begin{lstlisting}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: whoami
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: whoami
+  template:
+    metadata:
+      labels:
+        app: whoami
+    spec:
+      containers:
+        - name: whoami
+          image: traefik/whoami:v1.10
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoami
+spec:
+  type: NodePort
+  selector:
+    app: whoami
+  ports:
+    - port: 80
+      targetPort: 80
+      nodePort: 30080
+\end{lstlisting}
+
+\subsection{Commande 23 -- Déployer whoami et son Service}
+\begin{lstlisting}
+kubectl apply -f whoami.yaml
+\end{lstlisting}
+Applique les deux objets de whoami.yaml : un Deployment de trois réplicas et un Service NodePort utilisant le port 30080.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 23 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl apply -f whoami.yaml
+
+deployment.apps/whoami created
+service/whoami created
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 24 -- Attendre les trois réplicas}
+\begin{lstlisting}
+kubectl rollout status deployment/whoami --timeout=180s
+\end{lstlisting}
+Suit le déploiement jusqu’à la disponibilité des trois nouveaux Pods.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 24 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl rollout status deployment/whoami --timeout=180s
+
+Waiting for deployment "whoami" rollout to finish: 0 of 3 updated replicas are available...
+Waiting for deployment "whoami" rollout to finish: 1 of 3 updated replicas are available...
+Waiting for deployment "whoami" rollout to finish: 2 of 3 updated replicas are available...
+deployment "whoami" successfully rolled out
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 25 -- Inspecter les ressources applicatives}
+\begin{lstlisting}
+kubectl get deploy,rs,pods,svc -o wide
+\end{lstlisting}
+Affiche Deployment, ReplicaSet, Pods et Services. Le Deployment est à 3/3 et le Service expose 80:30080/TCP.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 25 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl get deploy,rs,pods,svc -o wide
+
+NAME                     READY   UP-TO-DATE   AVAILABLE   AGE   CONTAINERS   IMAGES                 SELECTOR
+deployment.apps/whoami   3/3     3            3           5s    whoami       traefik/whoami:v1.10   app=whoami
+
+NAME                               DESIRED   CURRENT   READY   AGE   CONTAINERS   IMAGES                 SELECTOR
+replicaset.apps/whoami-57487f77f   3         3         3       5s    whoami       traefik/whoami:v1.10   app=whoami,pod-template-hash=57487f77f
+
+NAME                         READY   STATUS    RESTARTS   AGE   IP           NODE             NOMINATED NODE   READINESS GATES
+pod/web                      1/1     Running   0          6s    10.244.1.3   tp-k8s-worker    <none>           <none>
+pod/whoami-57487f77f-gjspk   1/1     Running   0          5s    10.244.2.2   tp-k8s-worker2   <none>           <none>
+pod/whoami-57487f77f-p6ms8   1/1     Running   0          5s    10.244.1.4   tp-k8s-worker    <none>           <none>
+pod/whoami-57487f77f-xb589   1/1     Running   0          5s    10.244.2.3   tp-k8s-worker2   <none>           <none>
+
+NAME                 TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)        AGE   SELECTOR
+service/kubernetes   ClusterIP   10.96.0.1     <none>        443/TCP        71s   <none>
+service/whoami       NodePort    10.96.155.9   <none>        80:30080/TCP   5s    app=whoami
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 26 -- Envoyer six requêtes au Service}
+\begin{lstlisting}
+for i in {1..6}; do curl -fsS http://localhost:30080; done
+\end{lstlisting}
+La boucle Bash envoie six requêtes. Ici elles retournent le même Hostname ; un Service ne garantit pas l’alternance à chaque requête. Le journal de suivi ultérieur montre plusieurs Pods répondants.
+
+\clearpage
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 26 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ for i in {1..6}; do curl -fsS http://localhost:30080; done
+
+Hostname: whoami-57487f77f-p6ms8
+IP: 127.0.0.1
+IP: ::1
+IP: 10.244.1.4
+IP: fe80::2017:9ff:fec5:1e17
+RemoteAddr: 172.21.0.3:3341
+GET / HTTP/1.1
+Host: localhost:30080
+User-Agent: curl/8.5.0
+Accept: */*
+
+Hostname: whoami-57487f77f-p6ms8
+IP: 127.0.0.1
+IP: ::1
+IP: 10.244.1.4
+IP: fe80::2017:9ff:fec5:1e17
+RemoteAddr: 172.21.0.3:35718
+GET / HTTP/1.1
+Host: localhost:30080
+User-Agent: curl/8.5.0
+Accept: */*
+
+Hostname: whoami-57487f77f-p6ms8
+IP: 127.0.0.1
+IP: ::1
+IP: 10.244.1.4
+IP: fe80::2017:9ff:fec5:1e17
+RemoteAddr: 172.21.0.3:1952
+GET / HTTP/1.1
+Host: localhost:30080
+User-Agent: curl/8.5.0
+Accept: */*
+
+Hostname: whoami-57487f77f-p6ms8
+IP: 127.0.0.1
+IP: ::1
+IP: 10.244.1.4
+IP: fe80::2017:9ff:fec5:1e17
+RemoteAddr: 172.21.0.3:25611
+GET / HTTP/1.1
+Host: localhost:30080
+User-Agent: curl/8.5.0
+Accept: */*
+
+Hostname: whoami-57487f77f-p6ms8
+IP: 127.0.0.1
+IP: ::1
+IP: 10.244.1.4
+IP: fe80::2017:9ff:fec5:1e17
+RemoteAddr: 172.21.0.3:11984
+GET / HTTP/1.1
+Host: localhost:30080
+User-Agent: curl/8.5.0
+Accept: */*
+
+Hostname: whoami-57487f77f-p6ms8
+IP: 127.0.0.1
+IP: ::1
+IP: 10.244.1.4
+IP: fe80::2017:9ff:fec5:1e17
+RemoteAddr: 172.21.0.3:17985
+GET / HTTP/1.1
+Host: localhost:30080
+User-Agent: curl/8.5.0
+Accept: */*
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 27 -- Lister les Pods avant suppression}
+\begin{lstlisting}
+kubectl get pods
+\end{lstlisting}
+Identifie les Pods du Deployment avant le test d’auto-réparation.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 27 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl get pods
+
+NAME                     READY   STATUS    RESTARTS   AGE
+web                      1/1     Running   0          6s
+whoami-57487f77f-gjspk   1/1     Running   0          5s
+whoami-57487f77f-p6ms8   1/1     Running   0          5s
+whoami-57487f77f-xb589   1/1     Running   0          5s
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 28 -- Déclencher l’auto-réparation}
+\begin{lstlisting}
+kubectl delete pod "$(kubectl get pod -l app=whoami -o jsonpath="{.items[0].metadata.name}")"
+\end{lstlisting}
+Sélectionne un Pod portant app=whoami puis supprime son nom réel. Le ReplicaSet crée un remplaçant pour conserver trois réplicas.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 28 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl delete pod "$(kubectl get pod -l app=whoami -o jsonpath="{.items[0].metadata.name}")"
+
+pod "whoami-57487f77f-gjspk" deleted from default namespace
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 29 -- Attendre la réparation}
+\begin{lstlisting}
+kubectl rollout status deployment/whoami --timeout=120s
+\end{lstlisting}
+Attend le retour du Deployment à l’état disponible après le remplacement du Pod supprimé.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 29 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl rollout status deployment/whoami --timeout=120s
+
+deployment "whoami" successfully rolled out
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 30 -- Vérifier le Pod remplaçant}
+\begin{lstlisting}
+kubectl get pods
+\end{lstlisting}
+La liste contient un nouveau nom de Pod ; trois Pods whoami sont de nouveau prêts.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 30 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl get pods
+
+NAME                     READY   STATUS    RESTARTS   AGE
+web                      1/1     Running   0          8s
+whoami-57487f77f-gc6qt   1/1     Running   0          1s
+whoami-57487f77f-p6ms8   1/1     Running   0          7s
+whoami-57487f77f-xb589   1/1     Running   0          7s
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 31 -- Augmenter à six réplicas}
+\begin{lstlisting}
+kubectl scale deployment whoami --replicas=6
+\end{lstlisting}
+Modifie le nombre souhaité de Pods du Deployment. Cette opération augmente les réplicas applicatifs, pas le nombre de nœuds.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 31 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl scale deployment whoami --replicas=6
+
+deployment.apps/whoami scaled
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 32 -- Attendre le scaling}
+\begin{lstlisting}
+kubectl rollout status deployment/whoami --timeout=180s
+\end{lstlisting}
+Suit la création et la disponibilité des réplicas supplémentaires jusqu’à la fin du rollout.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 32 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl rollout status deployment/whoami --timeout=180s
+
+Waiting for deployment "whoami" rollout to finish: 3 of 6 updated replicas are available...
+Waiting for deployment "whoami" rollout to finish: 4 of 6 updated replicas are available...
+Waiting for deployment "whoami" rollout to finish: 5 of 6 updated replicas are available...
+deployment "whoami" successfully rolled out
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 33 -- Contrôler les six Pods}
+\begin{lstlisting}
+kubectl get pods
+\end{lstlisting}
+Confirme six Pods whoami Running, en plus du Pod web autonome.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 33 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl get pods
+
+NAME                     READY   STATUS    RESTARTS   AGE
+web                      1/1     Running   0          10s
+whoami-57487f77f-gc6qt   1/1     Running   0          3s
+whoami-57487f77f-p6ms8   1/1     Running   0          9s
+whoami-57487f77f-qxqdc   1/1     Running   0          1s
+whoami-57487f77f-r7vsk   1/1     Running   0          1s
+whoami-57487f77f-vgf9d   1/1     Running   0          1s
+whoami-57487f77f-xb589   1/1     Running   0          9s
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\clearpage
+\section{Partie D -- Rolling update et rollback}
+
+\subsection{Surveillance HTTP pendant les mises à jour}
+Une boucle en arrière-plan a enregistré l'heure et le Hostname de chaque réponse. Le délai de connexion est limité à trois secondes et les requêtes sont espacées de 0,5 seconde. La boucle est arrêtée après le rollback.
+\begin{lstlisting}
+while true; do
+  date -Iseconds
+  curl -fsS --max-time 3 localhost:30080 | grep Hostname
+  sleep 0.5
+done
+\end{lstlisting}
+Le journal complet apparaît à la commande 44. Les heures brutes sont en UTC, telles qu'enregistrées par WSL.
+
+\subsection{Commande 34 -- Mettre à jour vers v1.11}
+\begin{lstlisting}
+kubectl set image deployment/whoami whoami=traefik/whoami:v1.11
+\end{lstlisting}
+Change l’image du conteneur whoami. La modification du modèle de Pod déclenche un nouveau ReplicaSet et un remplacement progressif.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 34 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl set image deployment/whoami whoami=traefik/whoami:v1.11
+
+deployment.apps/whoami image updated
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 35 -- Suivre le rolling update}
+\begin{lstlisting}
+kubectl rollout status deployment/whoami --timeout=180s
+\end{lstlisting}
+Attend la fin du remplacement vers v1.11. Le rollout aboutit ; le suivi HTTP a néanmoins enregistré une réinitialisation de connexion pendant cette transition.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 35 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl rollout status deployment/whoami --timeout=180s
+
+Waiting for deployment "whoami" rollout to finish: 3 out of 6 new replicas have been updated...
+Waiting for deployment "whoami" rollout to finish: 3 out of 6 new replicas have been updated...
+Waiting for deployment "whoami" rollout to finish: 3 out of 6 new replicas have been updated...
+Waiting for deployment "whoami" rollout to finish: 3 out of 6 new replicas have been updated...
+Waiting for deployment "whoami" rollout to finish: 3 out of 6 new replicas have been updated...
+Waiting for deployment "whoami" rollout to finish: 4 out of 6 new replicas have been updated...
+Waiting for deployment "whoami" rollout to finish: 4 out of 6 new replicas have been updated...
+Waiting for deployment "whoami" rollout to finish: 4 out of 6 new replicas have been updated...
+Waiting for deployment "whoami" rollout to finish: 4 out of 6 new replicas have been updated...
+Waiting for deployment "whoami" rollout to finish: 5 out of 6 new replicas have been updated...
+Waiting for deployment "whoami" rollout to finish: 5 out of 6 new replicas have been updated...
+Waiting for deployment "whoami" rollout to finish: 5 out of 6 new replicas have been updated...
+Waiting for deployment "whoami" rollout to finish: 5 out of 6 new replicas have been updated...
+Waiting for deployment "whoami" rollout to finish: 5 out of 6 new replicas have been updated...
+Waiting for deployment "whoami" rollout to finish: 2 old replicas are pending termination...
+Waiting for deployment "whoami" rollout to finish: 2 old replicas are pending termination...
+Waiting for deployment "whoami" rollout to finish: 2 old replicas are pending termination...
+Waiting for deployment "whoami" rollout to finish: 2 old replicas are pending termination...
+Waiting for deployment "whoami" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "whoami" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "whoami" rollout to finish: 5 of 6 updated replicas are available...
+Waiting for deployment "whoami" rollout to finish: 5 of 6 updated replicas are available...
+deployment "whoami" successfully rolled out
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 36 -- Consulter les révisions}
+\begin{lstlisting}
+kubectl rollout history deployment/whoami
+\end{lstlisting}
+L’historique présente les révisions 1 et 2. CHANGE-CAUSE vaut <none>, car aucune cause n’a été renseignée.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 36 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl rollout history deployment/whoami
+
+deployment.apps/whoami 
+REVISION  CHANGE-CAUSE
+1         <none>
+2         <none>
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 37 -- Déployer une image inexistante}
+\begin{lstlisting}
+kubectl set image deployment/whoami whoami=traefik/whoami:v9.99
+\end{lstlisting}
+Demande volontairement v9.99 pour provoquer une erreur de téléchargement et étudier le comportement du rolling update.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 37 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl set image deployment/whoami whoami=traefik/whoami:v9.99
+
+deployment.apps/whoami image updated
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 38 -- Observer les Pods en échec}
+\begin{lstlisting}
+kubectl get pods
+\end{lstlisting}
+Après 35 secondes, les nouveaux Pods sont ErrImagePull ; cinq anciens Pods v1.11 restent Running. Les événements suivants confirment aussi ImagePullBackOff.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 38 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl get pods
+
+NAME                      READY   STATUS         RESTARTS   AGE
+web                       1/1     Running        0          50s
+whoami-86d567c94d-9xjll   0/1     ErrImagePull   0          35s
+whoami-86d567c94d-qmwj4   0/1     ErrImagePull   0          35s
+whoami-86d567c94d-qrbm7   0/1     ErrImagePull   0          35s
+whoami-c66799bf6-8bwr6    1/1     Running        0          37s
+whoami-c66799bf6-g684k    1/1     Running        0          40s
+whoami-c66799bf6-mhdb7    1/1     Running        0          40s
+whoami-c66799bf6-pmflg    1/1     Running        0          40s
+whoami-c66799bf6-wnl6d    1/1     Running        0          36s
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 39 -- Analyser les événements d’échec}
+\begin{lstlisting}
+kubectl get events --field-selector reason=Failed --sort-by=.lastTimestamp
+\end{lstlisting}
+Filtre les événements Failed et les trie par date. Le registre signale que l’image v9.99 est introuvable ; les tentatives conduisent à ImagePullBackOff.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 39 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl get events --field-selector reason=Failed --sort-by=.lastTimestamp
+
+LAST SEEN   TYPE      REASON   OBJECT                        MESSAGE
+22s         Warning   Failed   pod/whoami-86d567c94d-qrbm7   Failed to pull image "traefik/whoami:v9.99": rpc error: code = NotFound desc = failed to pull and unpack image "docker.io/traefik/whoami:v9.99": failed to resolve reference "docker.io/traefik/whoami:v9.99": docker.io/traefik/whoami:v9.99: not found
+22s         Warning   Failed   pod/whoami-86d567c94d-qrbm7   Error: ErrImagePull
+20s         Warning   Failed   pod/whoami-86d567c94d-qmwj4   Failed to pull image "traefik/whoami:v9.99": rpc error: code = NotFound desc = failed to pull and unpack image "docker.io/traefik/whoami:v9.99": failed to resolve reference "docker.io/traefik/whoami:v9.99": docker.io/traefik/whoami:v9.99: not found
+20s         Warning   Failed   pod/whoami-86d567c94d-qmwj4   Error: ErrImagePull
+17s         Warning   Failed   pod/whoami-86d567c94d-9xjll   Failed to pull image "traefik/whoami:v9.99": rpc error: code = NotFound desc = failed to pull and unpack image "docker.io/traefik/whoami:v9.99": failed to resolve reference "docker.io/traefik/whoami:v9.99": docker.io/traefik/whoami:v9.99: not found
+17s         Warning   Failed   pod/whoami-86d567c94d-9xjll   Error: ErrImagePull
+11s         Warning   Failed   pod/whoami-86d567c94d-qrbm7   Error: ImagePullBackOff
+6s          Warning   Failed   pod/whoami-86d567c94d-9xjll   Error: ImagePullBackOff
+5s          Warning   Failed   pod/whoami-86d567c94d-qmwj4   Error: ImagePullBackOff
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 40 -- Vérifier l’accès pendant l’erreur}
+\begin{lstlisting}
+curl -fsS http://localhost:30080
+\end{lstlisting}
+Le Service répond encore par un ancien Pod v1.11 malgré l’échec des nouveaux Pods.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 40 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ curl -fsS http://localhost:30080
+
+Hostname: whoami-c66799bf6-wnl6d
+IP: 127.0.0.1
+IP: ::1
+IP: 10.244.1.9
+IP: fe80::c0ff:efff:fe57:a0dd
+RemoteAddr: 172.21.0.3:23359
+GET / HTTP/1.1
+Host: localhost:30080
+User-Agent: curl/8.5.0
+Accept: */*
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 41 -- Revenir à la version précédente}
+\begin{lstlisting}
+kubectl rollout undo deployment/whoami
+\end{lstlisting}
+Restaure le modèle v1.11. Kubernetes avertit que le rollback ne met pas à jour l’annotation last-applied ; réappliquer le manifeste initial pourrait rétablir sa configuration v1.10 et trois réplicas.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 41 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl rollout undo deployment/whoami
+
+deployment.apps/whoami rolled back
+Warning: resource deployments/whoami was previously managed with 'kubectl apply'. Rolling back will not update the kubectl.kubernetes.io/last-applied-configuration annotation, which may cause unexpected behavior on future 'kubectl apply' operations. Consider using 'kubectl apply' with your previous configuration file instead.
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 42 -- Attendre la restauration}
+\begin{lstlisting}
+kubectl rollout status deployment/whoami --timeout=180s
+\end{lstlisting}
+Attend que les six réplicas de la version restaurée soient disponibles.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 42 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl rollout status deployment/whoami --timeout=180s
+
+Waiting for deployment "whoami" rollout to finish: 5 of 6 updated replicas are available...
+deployment "whoami" successfully rolled out
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 43 -- Contrôler les Pods après rollback}
+\begin{lstlisting}
+kubectl get pods
+\end{lstlisting}
+Six Pods v1.11 sont prêts. Un Pod de l’image incorrecte est encore Terminating à cet instant transitoire.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 43 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl get pods
+
+NAME                      READY   STATUS        RESTARTS   AGE
+web                       1/1     Running       0          51s
+whoami-86d567c94d-qrbm7   0/1     Terminating   0          36s
+whoami-c66799bf6-8bwr6    1/1     Running       0          38s
+whoami-c66799bf6-g684k    1/1     Running       0          41s
+whoami-c66799bf6-mhdb7    1/1     Running       0          41s
+whoami-c66799bf6-pmflg    1/1     Running       0          41s
+whoami-c66799bf6-tsxpk    1/1     Running       0          0s
+whoami-c66799bf6-wnl6d    1/1     Running       0          37s
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 44 -- Examiner la disponibilité mesurée}
+\begin{lstlisting}
+cat journaux/disponibilite.txt
+\end{lstlisting}
+Affiche les sondes HTTP horodatées. Une erreur Connection reset by peer apparaît pendant la mise à jour valide ; les requêtes continuent ensuite, y compris pendant l’image cassée. Ces sondes ne prouvent pas une disponibilité absolue entre deux mesures.
+
+\clearpage
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 44 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ cat journaux/disponibilite.txt
+
+2026-11-17T11:13:53+00:00
+Hostname: whoami-57487f77f-vgf9d
+2026-11-17T11:13:53+00:00
+Hostname: whoami-57487f77f-xb589
+2026-11-17T11:13:54+00:00
+Hostname: whoami-57487f77f-vgf9d
+2026-11-17T11:13:54+00:00
+Hostname: whoami-57487f77f-qxqdc
+2026-11-17T11:13:55+00:00
+Hostname: whoami-57487f77f-gc6qt
+2026-11-17T11:13:55+00:00
+Hostname: whoami-57487f77f-xb589
+2026-11-17T11:13:56+00:00
+Hostname: whoami-57487f77f-qxqdc
+2026-11-17T11:13:56+00:00
+Hostname: whoami-57487f77f-qxqdc
+2026-11-17T11:13:57+00:00
+Hostname: whoami-c66799bf6-mhdb7
+2026-11-17T11:13:57+00:00
+curl: (56) Recv failure: Connection reset by peer
+2026-11-17T11:13:58+00:00
+Hostname: whoami-c66799bf6-g684k
+2026-11-17T11:13:58+00:00
+Hostname: whoami-c66799bf6-mhdb7
+2026-11-17T11:13:59+00:00
+Hostname: whoami-c66799bf6-pmflg
+2026-11-17T11:13:59+00:00
+Hostname: whoami-c66799bf6-mhdb7
+2026-11-17T11:14:00+00:00
+Hostname: whoami-c66799bf6-g684k
+2026-11-17T11:14:00+00:00
+Hostname: whoami-c66799bf6-mhdb7
+2026-11-17T11:14:01+00:00
+Hostname: whoami-c66799bf6-8bwr6
+2026-11-17T11:14:01+00:00
+Hostname: whoami-c66799bf6-mhdb7
+2026-11-17T11:14:02+00:00
+Hostname: whoami-c66799bf6-g684k
+2026-11-17T11:14:02+00:00
+Hostname: whoami-c66799bf6-pmflg
+2026-11-17T11:14:03+00:00
+Hostname: whoami-c66799bf6-g684k
+2026-11-17T11:14:03+00:00
+Hostname: whoami-c66799bf6-mhdb7
+2026-11-17T11:14:04+00:00
+Hostname: whoami-c66799bf6-8bwr6
+2026-11-17T11:14:04+00:00
+Hostname: whoami-c66799bf6-8bwr6
+2026-11-17T11:14:05+00:00
+Hostname: whoami-c66799bf6-mhdb7
+2026-11-17T11:14:05+00:00
+Hostname: whoami-c66799bf6-mhdb7
+2026-11-17T11:14:06+00:00
+Hostname: whoami-c66799bf6-mhdb7
+2026-11-17T11:14:06+00:00
+Hostname: whoami-c66799bf6-mhdb7
+2026-11-17T11:14:07+00:00
+Hostname: whoami-c66799bf6-g684k
+2026-11-17T11:14:07+00:00
+Hostname: whoami-c66799bf6-mhdb7
+2026-11-17T11:14:08+00:00
+Hostname: whoami-c66799bf6-pmflg
+2026-11-17T11:14:08+00:00
+Hostname: whoami-c66799bf6-wnl6d
+2026-11-17T11:14:09+00:00
+Hostname: whoami-c66799bf6-wnl6d
+2026-11-17T11:14:09+00:00
+Hostname: whoami-c66799bf6-g684k
+2026-11-17T11:14:10+00:00
+Hostname: whoami-c66799bf6-pmflg
+2026-11-17T11:14:10+00:00
+Hostname: whoami-c66799bf6-g684k
+2026-11-17T11:14:11+00:00
+Hostname: whoami-c66799bf6-g684k
+2026-11-17T11:14:11+00:00
+Hostname: whoami-c66799bf6-mhdb7
+2026-11-17T11:14:12+00:00
+Hostname: whoami-c66799bf6-wnl6d
+2026-11-17T11:14:12+00:00
+Hostname: whoami-c66799bf6-8bwr6
+2026-11-17T11:14:13+00:00
+Hostname: whoami-c66799bf6-pmflg
+2026-11-17T11:14:13+00:00
+Hostname: whoami-c66799bf6-mhdb7
+2026-11-17T11:14:14+00:00
+Hostname: whoami-c66799bf6-wnl6d
+2026-11-17T11:14:15+00:00
+Hostname: whoami-c66799bf6-wnl6d
+2026-11-17T11:14:15+00:00
+Hostname: whoami-c66799bf6-g684k
+2026-11-17T11:14:16+00:00
+Hostname: whoami-c66799bf6-g684k
+2026-11-17T11:14:16+00:00
+Hostname: whoami-c66799bf6-mhdb7
+2026-11-17T11:14:17+00:00
+Hostname: whoami-c66799bf6-mhdb7
+2026-11-17T11:14:17+00:00
+Hostname: whoami-c66799bf6-mhdb7
+2026-11-17T11:14:18+00:00
+Hostname: whoami-c66799bf6-wnl6d
+2026-11-17T11:14:18+00:00
+Hostname: whoami-c66799bf6-mhdb7
+2026-11-17T11:14:19+00:00
+Hostname: whoami-c66799bf6-8bwr6
+2026-11-17T11:14:19+00:00
+Hostname: whoami-c66799bf6-g684k
+2026-11-17T11:14:20+00:00
+Hostname: whoami-c66799bf6-wnl6d
+2026-11-17T11:14:20+00:00
+Hostname: whoami-c66799bf6-wnl6d
+2026-11-17T11:14:21+00:00
+Hostname: whoami-c66799bf6-8bwr6
+2026-11-17T11:14:21+00:00
+Hostname: whoami-c66799bf6-8bwr6
+2026-11-17T11:14:22+00:00
+Hostname: whoami-c66799bf6-pmflg
+2026-11-17T11:14:22+00:00
+Hostname: whoami-c66799bf6-8bwr6
+2026-11-17T11:14:23+00:00
+Hostname: whoami-c66799bf6-g684k
+2026-11-17T11:14:23+00:00
+Hostname: whoami-c66799bf6-g684k
+2026-11-17T11:14:24+00:00
+Hostname: whoami-c66799bf6-8bwr6
+2026-11-17T11:14:24+00:00
+Hostname: whoami-c66799bf6-g684k
+2026-11-17T11:14:25+00:00
+Hostname: whoami-c66799bf6-wnl6d
+2026-11-17T11:14:25+00:00
+Hostname: whoami-c66799bf6-wnl6d
+2026-11-17T11:14:26+00:00
+Hostname: whoami-c66799bf6-pmflg
+2026-11-17T11:14:26+00:00
+Hostname: whoami-c66799bf6-pmflg
+2026-11-17T11:14:27+00:00
+Hostname: whoami-c66799bf6-8bwr6
+2026-11-17T11:14:27+00:00
+Hostname: whoami-c66799bf6-g684k
+2026-11-17T11:14:28+00:00
+Hostname: whoami-c66799bf6-g684k
+2026-11-17T11:14:28+00:00
+Hostname: whoami-c66799bf6-wnl6d
+2026-11-17T11:14:29+00:00
+Hostname: whoami-c66799bf6-mhdb7
+2026-11-17T11:14:29+00:00
+Hostname: whoami-c66799bf6-pmflg
+2026-11-17T11:14:30+00:00
+Hostname: whoami-c66799bf6-mhdb7
+2026-11-17T11:14:30+00:00
+Hostname: whoami-c66799bf6-g684k
+2026-11-17T11:14:31+00:00
+Hostname: whoami-c66799bf6-wnl6d
+2026-11-17T11:14:31+00:00
+Hostname: whoami-c66799bf6-8bwr6
+2026-11-17T11:14:32+00:00
+Hostname: whoami-c66799bf6-mhdb7
+2026-11-17T11:14:32+00:00
+Hostname: whoami-c66799bf6-wnl6d
+2026-11-17T11:14:33+00:00
+Hostname: whoami-c66799bf6-mhdb7
+2026-11-17T11:14:33+00:00
+Hostname: whoami-c66799bf6-g684k
+2026-11-17T11:14:34+00:00
+Hostname: whoami-c66799bf6-wnl6d
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\clearpage
+\section{Vérifications finales et défi DNS}
+
+\subsection{Commande 45 -- Enregistrer l’historique final}
+\begin{lstlisting}
+kubectl rollout history deployment/whoami | tee historique-rollout.txt
+\end{lstlisting}
+tee conserve la sortie dans historique-rollout.txt tout en l’affichant. Les révisions visibles sont 1, 3 et 4 : la révision v1.11 réutilisée devient la plus récente après le rollback.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 45 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl rollout history deployment/whoami | tee historique-rollout.txt
+
+deployment.apps/whoami 
+REVISION  CHANGE-CAUSE
+1         <none>
+3         <none>
+4         <none>
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 46 -- Compter les ReplicaSets}
+\begin{lstlisting}
+kubectl get rs
+\end{lstlisting}
+Trois ReplicaSets sont conservés : v1.10 à zéro réplique, v9.99 à zéro et v1.11 à six. Cet historique permet les retours de version.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 46 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl get rs
+
+NAME                DESIRED   CURRENT   READY   AGE
+whoami-57487f77f    0         0         0       51s
+whoami-86d567c94d   0         0         0       37s
+whoami-c66799bf6    6         6         6       42s
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 47 -- Vérifier les EndpointSlices}
+\begin{lstlisting}
+kubectl get endpointslices -l kubernetes.io/service-name=whoami
+\end{lstlisting}
+Le label kubernetes.io/service-name=whoami sélectionne les EndpointSlices du Service. Le relevé affiche six adresses de Pods, dont trois abrégées par la sortie tabulaire.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 47 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl get endpointslices -l kubernetes.io/service-name=whoami
+
+NAME           ADDRESSTYPE   PORTS   ENDPOINTS                                      AGE
+whoami-8z5zk   IPv4          80      10.244.2.6,10.244.1.7,10.244.1.8 + 3 more...   51s
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 48 -- Tester le DNS depuis BusyBox}
+\begin{lstlisting}
+kubectl run test --rm -i --restart=Never --image=busybox:1.36 -- wget -qO- http://whoami.default.svc.cluster.local
+\end{lstlisting}
+Crée un Pod temporaire qui exécute wget sur le nom complet du Service puis est supprimé avec --rm. Malgré un avertissement d’attachement, le repli sur les logs affiche la réponse HTTP et la commande se termine avec le code zéro.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 48 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl run test --rm -i --restart=Never --image=busybox:1.36 -- wget -qO- http://whoami.default.svc.cluster.local
+
+Hostname: whoami-c66799bf6-pmflg
+IP: 127.0.0.1
+IP: ::1
+IP: 10.244.2.7
+IP: fe80::20bd:edff:fee3:b78b
+RemoteAddr: 10.244.2.12:49290
+GET / HTTP/1.1
+Host: whoami.default.svc.cluster.local
+User-Agent: Wget
+Connection: close
+
+Hostname: whoami-c66799bf6-pmflg
+IP: 127.0.0.1
+IP: ::1
+IP: 10.244.2.7
+IP: fe80::20bd:edff:fee3:b78b
+RemoteAddr: 10.244.2.12:49290
+GET / HTTP/1.1
+Host: whoami.default.svc.cluster.local
+User-Agent: Wget
+Connection: close
+
+pod "test" deleted from default namespace
+All commands and output from this session will be recorded in container logs, including credentials and sensitive information passed through the command prompt.
+If you don't see a command prompt, try pressing enter.
+warning: couldn't attach to pod/test, falling back to streaming logs: unable to upgrade connection: container test not found in pod test_default
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\subsection{Commande 49 -- Vérifier l’image finale}
+\begin{lstlisting}
+kubectl get deployment whoami -o jsonpath="{.spec.template.spec.containers[0].image}"
+\end{lstlisting}
+Lit directement l’image dans le modèle du Deployment. La valeur traefik/whoami:v1.11 confirme la version restaurée.
+\begin{tcolorbox}[terminal,title={Ubuntu / WSL2 -- Commande 49 -- rendu reconstitué}]
+\begin{Verbatim}[fontsize=\scriptsize,breaklines=true,breakanywhere=true,breaksymbolleft={},breaksymbolright={}]
+yahya@tp-k8s:~/tp4$ kubectl get deployment whoami -o jsonpath="{.spec.template.spec.containers[0].image}"
+
+traefik/whoami:v1.11
+\end{Verbatim}
+\end{tcolorbox}
+\textbf{Code de retour :} 0.
+
+\clearpage\section{Réponses aux cinq questions}
+\subsection{Rôle des Pods de kube-system}
+\begin{tabularx}{\linewidth}{lX}\toprule
+\textbf{Composant} & \textbf{Rôle} \\\midrule
+etcd & Stocke l'état et la configuration du cluster. \\
+kube-apiserver & Expose l'API Kubernetes et traite les requêtes. \\
+kube-scheduler & Affecte les nouveaux Pods aux nœuds. \\
+kube-controller-manager & Exécute les contrôleurs qui réconcilient l'état réel et l'état souhaité. \\
+kube-proxy & Met en œuvre le routage réseau des Services. \\
+CoreDNS & Résout les noms DNS internes. \\
+kindnet & Assure la connectivité réseau des Pods dans kind. \\\bottomrule
+\end{tabularx}
+\subsection{Pourquoi web n'est-il pas recréé ?}
+Le Pod web est autonome : aucun contrôleur ne maintient son existence. Les Pods whoami sont gérés par un ReplicaSet qui maintient le nombre demandé par le Deployment. La suppression d'un Pod whoami provoque donc son remplacement.
+\subsection{Relation Deployment, ReplicaSet et Pod}
+Le Deployment gère les versions du modèle ; chaque ReplicaSet maintient les Pods correspondant à un modèle. Trois ReplicaSets sont observés à la fin : v1.10 et v9.99 ont zéro réplique ; v1.11 en a six. Le rollback réutilise le ReplicaSet v1.11 et lui attribue la révision la plus récente. Les anciens modèles sont conservés pour permettre des retours de version.
+\subsection{Comment le Service trouve-t-il les Pods ?}
+Le sélecteur du Service correspond au label \texttt{app=whoami} des Pods. Kubernetes maintient les EndpointSlices et leurs conditions de disponibilité ; le trafic est acheminé vers les endpoints utilisables. Le relevé final présente les six adresses associées au Service.
+\subsection{Disponibilité et maxUnavailable}
+Pour six réplicas, les valeurs par défaut donnent \texttt{maxUnavailable=25\%}, soit un Pod après arrondi inférieur, et \texttt{maxSurge=25\%}, soit deux Pods supplémentaires après arrondi supérieur. Pendant l'image cassée, cinq anciens Pods restent prêts et répondent ; le remplacement ne peut pas se terminer tant que les nouveaux Pods ne deviennent pas disponibles.
+
+\textbf{Limite mesurée :} une erreur \texttt{Connection reset by peer} est enregistrée pendant le rolling update valide de v1.10 vers v1.11. Il serait incorrect de conclure à une absence totale d'interruption sur toute la session. Les requêtes observées pendant l'image cassée continuent à réussir ; le sondage périodique ne mesure pas les intervalles entre deux requêtes.
+\section{Explication du défi DNS}
+Dans \texttt{whoami.default.svc.cluster.local}, \texttt{whoami} est le nom du Service, \texttt{default} son namespace, \texttt{svc} désigne les Services et \texttt{cluster.local} est le domaine du cluster. BusyBox reçoit une réponse HTTP via ce nom sans connaître l'adresse IP du Service.
+\section*{Conclusion}\addcontentsline{toc}{section}{Conclusion}
+Les trois nœuds sont prêts. Les manipulations du Pod, le déploiement whoami, le scaling à six réplicas, le test d'image inexistante, le rollback vers v1.11 et l'accès DNS ont abouti. Les journaux conservent aussi les avertissements et l'erreur HTTP transitoire observée. Les fichiers nécessaires à la remise sont regroupés dans le dépôt GitHub indiqué sur la page de garde.
+\end{document}
